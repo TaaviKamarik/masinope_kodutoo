@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Graph</title>
+    <style>
+        svg {
+            border: 1px solid #ccc;
+        }
+
+        circle {
+            fill: steelblue;
+            stroke: #fff;
+            stroke-width: 2px;
+        }
+
+        line {
+            stroke-opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+
+<svg width="800" height="500"></svg>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+    // Generate random graph data with 50 nodes
+    const numNodes = 50;
+    const maxConnections = 7;
+    let start = null;
+    let end = null;
+    let allLinkIds = [];
+
+    function dijkstra(localGraph, start, end) {
+        const distances = Array(numNodes).fill(9999.9999);
+        const previous = Array(numNodes).fill(-1);
+        const linkIDs = Array(numNodes).fill(-1);
+        const unvisited = Array(numNodes).fill(0);
+        let currentNode = start;
+
+        previous[start] = -1;
+        distances[start] = 0;
+        linkIDs[start] = 0;
+        let repeats = 0;
+
+        while (repeats < numNodes) {
+            let highNr = 9999.9999;
+            for (let i = 0; i < numNodes; i++) {
+                if(distances[i] < highNr && unvisited[i] === 0){
+                    highNr = distances[i];
+                    currentNode = i;
+                }
+            }
+            localGraph[currentNode].connections.forEach(c => {
+                if(distances[c.target] > c.dist + distances[currentNode] && unvisited[c.target] === 0){
+                    distances[c.target] = c.dist + distances[currentNode];
+                    linkIDs[c.target] = c.linkID;
+                    previous[c.target] = currentNode;
+                }
+            })
+            unvisited[currentNode] = 1;
+            repeats ++;
+        }
+
+        if(repeats !== numNodes) {
+            console.log("ERROR!")
+        }
+
+        let currentPrevious = previous[end];
+        let curNode = end;
+        const previousArr = []
+        const linkArr = []
+
+        while (currentPrevious !== -1){
+            previousArr.push(curNode)
+            linkArr.push(linkIDs[curNode])
+            curNode = currentPrevious
+            currentPrevious = previous[currentPrevious]
+        }
+
+        previousArr.push(curNode)
+
+        d3.selectAll('line').transition().duration(500)
+            .attr("stroke", d => {return(linkArr.includes(d.id) || linkArr.includes(d.id.split("_")[1] + "_" + d.id.split("_")[0]) ? "red" : "#999")})
+            .attr("stroke-width", d => {return(linkArr.includes(d.id) || linkArr.includes(d.id.split("_")[1] + "_" + d.id.split("_")[0]) ? 4 : 2)})
+
+    }
+
+    const graph = {
+        nodes: Array.from({ length: numNodes }, (_, i) => ({ id: i, x: Math.random() * 750 + 25, y: Math.random() * 450 + 25, connections: [] })),
+        links: []
+    };
+
+    function calculateDistance(node1, node2) {
+        return Math.sqrt(Math.pow(node1.x - node2.x, 2) + Math.pow(node1.y - node2.y, 2));
+    }
+
+    graph.nodes.forEach((node, i) => {
+        const distances = graph.nodes.map((otherNode, j) => ({ index: j, distance: calculateDistance(node, otherNode) }));
+
+        distances.sort((a, b) => a.distance - b.distance);
+
+        for (let j = 1; j <= Math.min(maxConnections, numNodes - 1); j++) {
+            const targetIndex = distances[j].index;
+            const dist = Math.sqrt(Math.pow((graph.nodes[targetIndex].x - graph.nodes[i].x), 2) + Math.pow((graph.nodes[targetIndex].y - graph.nodes[i].y), 2))
+            if(!allLinkIds.includes(i + "_" + targetIndex) &&  !allLinkIds.includes(targetIndex + "_" + i)){
+                graph.links.push({id: i + "_" + targetIndex, source: i, target: targetIndex, dist: dist });
+                allLinkIds.push(i + "_" + targetIndex);
+            }
+            graph.nodes[i].connections.push({target: targetIndex, dist: dist, linkID: i + "_" + targetIndex});
+            graph.nodes[targetIndex].connections.push({target: i, dist: dist, linkID: targetIndex + "_" + i});
+
+
+        }
+    });
+
+    const svg = d3.select('svg');
+    const link = svg.append('g').attr('class', 'links').selectAll('line').data(graph.links).enter().append('line');
+    const node = svg.append('g').attr('class', 'nodes').selectAll('circle').data(graph.nodes).enter().append('circle')
+        .attr('r', 5);
+
+    link
+        .attr('x1', d => graph.nodes[d.source].x)
+        .attr('y1', d => graph.nodes[d.source].y)
+        .attr('x2', d => graph.nodes[d.target].x)
+        .attr('y2', d => graph.nodes[d.target].y)
+        .attr('id', d => graph.nodes[d.source].id + "_" + graph.nodes[d.target].id)
+        .attr("stroke-width", 2)
+        .attr("stroke", "#999")
+        .on("click", d => console.log(d.target.__data__.id));
+
+    node
+        .attr('cx', d => d.x)
+        .attr('cy', d => d.y).on("click", d => console.log(d))
+        .on("mouseover", d => console.log(d.target.__data__.id))
+        .on("click", d => {
+            if (start == null){
+                start = d.target.__data__.id;
+            }else if (end == null) {
+                end = d.target.__data__.id;
+            }
+            if(start !== null && end !== null){
+                console.log(start)
+                console.log(end)
+                dijkstra(graph.nodes, start, end);
+            }
+        })
+</script>
+</body>
+</html>
